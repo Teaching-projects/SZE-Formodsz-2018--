@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.1//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_2.dtd'>
+<nta>
+	<declaration>// Place global declarations here.
+const int N = 3;                                              // Number of tasks.
+typedef int[0,N-1] batch_id;                                  // Process IDs.
+
+const int batch_comp_time[batch_id] = { 5,  1,  3 };         // Computation Times
+broadcast chan dayend_finished; //When the dayend finishes, the batches will be notifed, that they can run again.
+chan batch_running,batch_finished; //Communication channel between the scheduler and the batches.
+
+
+batch_id queue[batch_id]; // Task queue
+int[0,N] length = N; // Length of the queue, how many batches are eligible to run
+
+// Functions
+batch_id next_batch() {return queue[0];} // Returns the id of the eligible batch
+bool isEmpty() {return length == 0;} //Checks, if there are eligible batches.
+
+//Initialize the starting batches.
+void initialize()
+{
+  for(i : batch_id) { queue[i] = i;}
+  length := N;
+}
+
+//When a batch finishes, it will be removes from the queue
+void remove()
+{
+  int i;
+  for(i = 0; i+1 &lt; N; ++i) { queue[i] = queue[i+1]; }
+  if (length&gt;0) {
+    queue[--length] = 0;
+  }
+}</declaration>
+	<template>
+		<name x="5" y="5">Batch</name>
+		<parameter>const batch_id id</parameter>
+		<declaration>// Place local declarations here.
+// If the batch runs on errorm the job will be restarted.
+bool error;
+clock running_time;</declaration>
+		<location id="id0" x="136" y="399">
+			<name x="126" y="365">Error</name>
+			<label kind="invariant" x="127" y="416">running_time&lt;=2*batch_comp_time[id]</label>
+		</location>
+		<location id="id1" x="0" y="306">
+			<name x="-34" y="272">Error_Y_N</name>
+			<committed/>
+		</location>
+		<location id="id2" x="0" y="161">
+			<name x="-10" y="127">Batch_running</name>
+			<label kind="invariant" x="-10" y="178">running_time&lt;=batch_comp_time[id]</label>
+		</location>
+		<location id="id3" x="0" y="-161">
+			<name x="-10" y="-195">Finished</name>
+		</location>
+		<location id="id4" x="0" y="-34">
+			<name x="-10" y="-68">Ready</name>
+		</location>
+		<init ref="id4"/>
+		<transition>
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="assignment" x="18" y="306">error := true</label>
+			<label kind="comments" x="51" y="289">Restart</label>
+			<nail x="136" y="306"/>
+		</transition>
+		<transition>
+			<source ref="id1"/>
+			<target ref="id3"/>
+			<label kind="synchronisation" x="-144" y="289">batch_finished!</label>
+			<label kind="assignment" x="-238" y="42">remove()</label>
+			<label kind="comments" x="-238" y="-8">Sikeres futás után
+a Scheduler értesítése
+és a batch eltávolítása</label>
+			<nail x="-162" y="306"/>
+			<nail x="-162" y="-161"/>
+		</transition>
+		<transition>
+			<source ref="id1"/>
+			<target ref="id0"/>
+			<label kind="guard" x="18" y="365">error==false</label>
+			<label kind="comments" x="-68" y="348">Hiba esetén a 
+batch újrafuttatása</label>
+			<nail x="0" y="399"/>
+		</transition>
+		<transition>
+			<source ref="id2"/>
+			<target ref="id1"/>
+			<label kind="comments" x="-17" y="221">Futás</label>
+		</transition>
+		<transition>
+			<source ref="id4"/>
+			<target ref="id2"/>
+			<label kind="guard" x="0" y="0">next_batch() == id
+&amp;&amp; length!=0</label>
+			<label kind="synchronisation" x="0" y="51">batch_running?</label>
+			<label kind="assignment" x="0" y="68">running_time:=0</label>
+			<label kind="comments" x="-34" y="25">Engedélyezés
+ellenőrzése</label>
+			<nail x="0" y="51"/>
+		</transition>
+		<transition>
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="synchronisation" x="0" y="-97">dayend_finished?</label>
+			<label kind="comments" x="-59" y="-136">A Dayend futása
+után lesz újra
+futtatható a batch</label>
+		</transition>
+	</template>
+	<template>
+		<name>Scheduler</name>
+		<location id="id5" x="-51" y="-110">
+			<name x="-61" y="-144">Select</name>
+			<urgent/>
+		</location>
+		<location id="id6" x="-51" y="34">
+			<name x="-61" y="0">Occupied</name>
+		</location>
+		<location id="id7" x="-51" y="-272">
+			<name x="-61" y="-306">Free</name>
+		</location>
+		<location id="id8" x="-51" y="-365">
+			<name x="-61" y="-399">Init</name>
+		</location>
+		<init ref="id8"/>
+		<transition>
+			<source ref="id7"/>
+			<target ref="id5"/>
+			<label kind="comments" x="-153" y="-221">Szabad, új batch kiválasztása</label>
+		</transition>
+		<transition>
+			<source ref="id5"/>
+			<target ref="id6"/>
+			<label kind="synchronisation" x="-51" y="-42">batch_running!</label>
+			<label kind="comments" x="-153" y="-59">Kiválasztott batch futtatása</label>
+		</transition>
+		<transition>
+			<source ref="id6"/>
+			<target ref="id7"/>
+			<label kind="synchronisation" x="-33" y="17">batch_finished?</label>
+			<label kind="comments" x="17" y="-136">Batch futása befejeződött</label>
+			<nail x="119" y="34"/>
+			<nail x="119" y="-272"/>
+		</transition>
+		<transition>
+			<source ref="id8"/>
+			<target ref="id7"/>
+			<label kind="comments" x="-119" y="-331">Scheduler inicialázása</label>
+		</transition>
+	</template>
+	<template>
+		<name>Dayend</name>
+		<declaration>clock dayend_duration;</declaration>
+		<location id="id9" x="-93" y="76">
+			<name x="-161" y="59">Finished</name>
+		</location>
+		<location id="id10" x="0" y="-119">
+			<name x="-10" y="-153">Init</name>
+			<committed/>
+		</location>
+		<location id="id11" x="0" y="153">
+			<name x="-10" y="119">Runnning</name>
+		</location>
+		<location id="id12" x="0" y="0">
+			<name x="-10" y="-34">Idle</name>
+			<committed/>
+		</location>
+		<init ref="id10"/>
+		<transition>
+			<source ref="id11"/>
+			<target ref="id9"/>
+			<label kind="guard" x="-75" y="80">length==0</label>
+			<label kind="comments" x="-75" y="139">Dayend vége</label>
+		</transition>
+		<transition>
+			<source ref="id9"/>
+			<target ref="id12"/>
+			<label kind="synchronisation" x="-75" y="21">dayend_finished!</label>
+			<label kind="comments" x="-178" y="25">Felkészülés újabb zárásra</label>
+		</transition>
+		<transition>
+			<source ref="id10"/>
+			<target ref="id12"/>
+			<label kind="comments" x="-59" y="-76">Dayend inicialázása</label>
+			<nail x="0" y="-8"/>
+			<nail x="0" y="-8"/>
+		</transition>
+		<transition>
+			<source ref="id12"/>
+			<target ref="id11"/>
+			<label kind="assignment" x="18" y="38">initialize(),
+dayend_duration=0</label>
+			<label kind="comments" x="25" y="68">Dayend futtatása</label>
+			<nail x="85" y="76"/>
+		</transition>
+	</template>
+	<system>// Place template instantiations here.
+// List one or more processes to be composed into a system.
+system Batch, Scheduler, Dayend;
+    </system>
+	<queries>
+		<query>
+			<formula>Batch(0).Batch_running --&gt; Batch(0).Finished
+			</formula>
+			<comment>If Batch(0) starts to run, it will finish.
+			</comment>
+		</query>
+		<query>
+			<formula>Batch(2).Batch_running --&gt; Batch(2).Finished
+			</formula>
+			<comment>If Batch(2) starts to run, it will finish.
+			</comment>
+		</query>
+		<query>
+			<formula>Batch(1).Batch_running --&gt; Batch(1).Finished
+			</formula>
+			<comment>If a batch started running, it will finish.
+			</comment>
+		</query>
+		<query>
+			<formula>A[] forall (i:batch_id) forall (j:batch_id) Batch(i).Batch_running &amp;&amp; Batch(j).Batch_running imply i == j
+			</formula>
+			<comment>When one batch is running, the others are already finished or waiting for running time.
+			</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; Batch(1).Batch_running &amp;&amp; Batch(2).Ready
+			</formula>
+			<comment>It is possible, that Batch(1) is running and Batch(2) is ready and waiting.
+			</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; Batch(0).Batch_running &amp;&amp; Batch(1).Ready &amp;&amp; Batch(2).Ready
+			</formula>
+			<comment>It is possible, that Batch(0) is running and the other two batches are waiting.
+			</comment>
+		</query>
+		<query>
+			<formula>A[] not deadlock
+
+			</formula>
+			<comment>The system is deadlock free.
+			</comment>
+		</query>
+	</queries>
+</nta>
